@@ -1,0 +1,14 @@
+pkg/*
+doc
+*.gem
+.bundle
+.idea
+.yardoc
+tags
+*~
+Gemfile.lock
+.rbx
+coverage/
+tmp/
+idea/
+
