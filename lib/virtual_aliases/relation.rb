@@ -9,7 +9,7 @@ module VirtualAliases
     end
 
     def valiases!(*args)
-      args.reject!(&:blank?)
+      # args.reject!(&:blank?)
       args.flatten!
 
       self.valiases_values = args.first
@@ -24,46 +24,43 @@ module VirtualAliases
       @valiases
     end
 
-    def arel
-      return @arel if @arel
+    def build_arel
 
       if @valiases
-        # now do the magic stuff
 
         valiases_joins = ActiveRecord::Associations::JoinDependency.new(@klass, valiases_values ,[])
 
         keypaths = association_keypaths( valiases_joins )
 
-        # now add the left joins to this relation
-        self.joins!( valiases_joins )
+        # now add the left joins to this relation and prevent readding (don't fully understand
+        # yet why we can enter here multiple times for cloned relations )
+        self.joins!( valiases_joins ) unless @valiases_joins_added
+        @valiases_joins_added = true
 
         # call the standard AR::Relation to AREL function
-        @arel = build_arel
+        @arel = super
 
-        Arel::Visitors::DepthFirst.new(lambda {|n|
-                                         case(n)
-                                           when Arel::Nodes::SqlLiteral
-                                             n.gsub!(/\{(.*?)\}/) { |vfield|
-                                               if $1 =~ /^([^.]*)$|^(.*)\.(.*)$/
-                                                 if $1
-                                                   real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(keypaths[virtual_alias]),@klass.connection.quote_column_name($1)]
-                                                 elsif $2 and $3
-                                                   if keypaths[$2]
-                                                     real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(keypaths[$2]),@klass.connection.quote_column_name($3)]
-                                                   else
-                                                     raise Error, "virtual alias #{$2} not found!"
-                                                   end
-                                                 else
-                                                   raise Error, "virtual alias #{$1} can't be parsed!"
+        @arel.ast.grep(Arel::Nodes::SqlLiteral) do |n|
+          n.gsub!(/\{(.*?)\}/) { |vfield|
+            if $1 =~ /^([^.]*)$|^(.*)\.(.*)$/
+              if $1
+                real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(@klass.table_name),@klass.connection.quote_column_name($1)]
+              elsif $2 and $3
+                if keypaths[$2]
+                  real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(keypaths[$2]),@klass.connection.quote_column_name($3)]
+                else
+                  raise Error, "virtual alias #{$2} not found!"
+                end
+              else
+                raise Error, "virtual alias #{$1} can't be parsed!"
 
-                                                 end
-                                               else
-                                                 raise Error, "virtual alias #{vfield} can't be parsed!"
-                                               end
-                                               real_aliased_field
-                                             }
-                                         end
-                                       }).accept(@arel.ast)
+              end
+            else
+              raise Error, "virtual alias #{vfield} can't be parsed!"
+            end
+            real_aliased_field
+          }
+        end
 
         @arel
       else
