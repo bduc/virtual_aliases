@@ -44,10 +44,12 @@ module VirtualAliases
           n.gsub!(/\{(.*?)\}/) { |vfield|
             if $1 =~ /^([^.]*)$|^(.*)\.(.*)$/
               if $1
-                real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(@klass.table_name),@klass.connection.quote_column_name($1)]
+                real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(@klass.table_name),
+                                                ($1 == '*') ? '*' : @klass.connection.quote_column_name($1)]
               elsif $2 and $3
                 if keypaths[$2]
-                  real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(keypaths[$2]),@klass.connection.quote_column_name($3)]
+                  real_aliased_field = "%s.%s" % [@klass.connection.quote_table_name(keypaths[$2]),
+                                                  ($3 == '*') ? '*' : @klass.connection.quote_column_name($3)]
                 else
                   raise Error, "virtual alias #{$2} not found!"
                 end
